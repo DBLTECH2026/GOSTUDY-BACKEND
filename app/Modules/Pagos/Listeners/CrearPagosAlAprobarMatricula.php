@@ -23,6 +23,14 @@ class CrearPagosAlAprobarMatricula
 
     public function handle(MatriculaAprobada $event): void
     {
-        $this->crearPagos->crearPagosParaMatricula($event->matricula);
+        $matricula = $event->matricula;
+        $anio = $matricula->periodo?->anio
+            ?? (int) $matricula->fecha_matricula->format('Y');
+
+        $this->crearPagos->crearPagosParaMatricula(
+            (int) $matricula->id,
+            $matricula->fecha_matricula,
+            $anio,
+        );
     }
 }
