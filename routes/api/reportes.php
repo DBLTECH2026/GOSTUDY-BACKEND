@@ -5,11 +5,11 @@
 | Reportes simples del sistema.
 */
 
+use App\Modules\Reportes\Controllers\ReporteController;
 use Illuminate\Support\Facades\Route;
-// use App\Modules\Reportes\Controllers\ReporteController;
 
 Route::middleware('auth:sanctum')->prefix('reportes')->group(function () {
-    // Persona C:
-    // Route::get('matriculas-por-seccion', [ReporteController::class, 'matriculasPorSeccion']);
-    // Route::get('pagos-por-periodo', [ReporteController::class, 'pagosPorPeriodo']);
+    Route::get('inscripciones',          [ReporteController::class, 'inscripciones']);
+    Route::get('matriculas-por-seccion', [ReporteController::class, 'matriculasPorSeccion']);
+    Route::get('pagos-por-periodo',      [ReporteController::class, 'pagosPorPeriodo']);
 });
