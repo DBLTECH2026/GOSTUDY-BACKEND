@@ -1,19 +1,18 @@
 <?php
 
 /*
-| Rutas del módulo Personas — Persona A
-| Estudiantes, Docentes, Perfiles Familiares (Padres/Apoderados).
-| Todas las rutas deben estar protegidas con auth:sanctum.
+| Rutas del módulo Personas — stubs implementados por Persona C
+| (cuando Persona A termine su módulo formal, debe consolidarse).
 */
 
+use App\Modules\Personas\Controllers\DocenteController;
+use App\Modules\Personas\Controllers\EstudianteController;
 use Illuminate\Support\Facades\Route;
-// use App\Modules\Personas\Controllers\EstudianteController;
-// use App\Modules\Personas\Controllers\DocenteController;
-// use App\Modules\Personas\Controllers\PerfilFamiliarController;
 
 Route::middleware('auth:sanctum')->group(function () {
-    // Persona A: definir aquí las rutas de personas.
-    // Route::apiResource('estudiantes', EstudianteController::class);
-    // Route::apiResource('docentes', DocenteController::class);
-    // Route::apiResource('perfiles-familiares', PerfilFamiliarController::class);
+    Route::get('estudiantes',  [EstudianteController::class, 'index']);
+    Route::post('estudiantes', [EstudianteController::class, 'store']);
+
+    Route::get('docentes',  [DocenteController::class, 'index']);
+    Route::post('docentes', [DocenteController::class, 'store']);
 });

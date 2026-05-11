@@ -9,6 +9,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 
 /**
  * GOSTUDY — Persona C · Portal del Estudiante.
@@ -136,6 +138,63 @@ class PortalController extends Controller
             ->get();
 
         return response()->json(['data' => $cursos]);
+    }
+
+    /**
+     * POST /api/v1/portal/pagos/{pago}/subir-comprobante  (multipart)
+     *
+     * El apoderado/estudiante sube el voucher de un pago realizado por
+     * Yape/Plin/transferencia. El pago queda en estado "pendiente" pero con
+     * comprobante_url cargado; el admin lo verifica y marca como pagado.
+     */
+    public function subirComprobante(Request $request, Pago $pago): JsonResponse
+    {
+        $estudianteId = $this->estudianteId($request);
+
+        // Verificar que el pago pertenece a una matrícula del estudiante autenticado.
+        $matriculaPropia = DB::table('matriculas')
+            ->where('id', $pago->matricula_id)
+            ->where('estudiante_id', $estudianteId)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if (! $matriculaPropia) {
+            abort(403, 'Este pago no te pertenece.');
+        }
+
+        if (! in_array($pago->estado, [Pago::ESTADO_PENDIENTE, Pago::ESTADO_VENCIDO], true)) {
+            return response()->json([
+                'message' => 'Solo puedes subir comprobante para pagos pendientes o vencidos.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'metodo'        => ['required', Rule::in([
+                Pago::METODO_TRANSFERENCIA,
+                Pago::METODO_YAPE,
+                Pago::METODO_PLIN,
+                Pago::METODO_OTRO,
+            ])],
+            'comprobante'   => ['required', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
+            'observaciones' => ['nullable', 'string', 'max:300'],
+        ]);
+
+        $path = $request->file('comprobante')->store('comprobantes', 'public');
+
+        $pago->update([
+            'comprobante_url' => $path,
+            'metodo'          => $data['metodo'],
+            'observaciones'   => trim(
+                '[POR VERIFICAR] ' .
+                ($data['observaciones'] ?? '') .
+                ' (subido ' . now()->toDateTimeString() . ')'
+            ),
+        ]);
+
+        return response()->json([
+            'message' => 'Comprobante subido. El colegio verificará el pago en las próximas 24 horas.',
+            'data'    => new PagoResource($pago->fresh()),
+        ]);
     }
 
     private function estudianteId(Request $request): int

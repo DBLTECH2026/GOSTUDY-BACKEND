@@ -14,4 +14,5 @@ Route::middleware(['auth:sanctum'/*, 'es.estudiante'*/])->prefix('portal')->grou
     Route::get('/mi-matricula', [PortalController::class, 'miMatricula']);
     Route::get('/mis-pagos',    [PortalController::class, 'misPagos']);
     Route::get('/mis-cursos',   [PortalController::class, 'misCursos']);
+    Route::post('/pagos/{pago}/subir-comprobante', [PortalController::class, 'subirComprobante']);
 });

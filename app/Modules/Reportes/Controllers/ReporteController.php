@@ -14,6 +14,47 @@ use Illuminate\Support\Facades\DB;
 class ReporteController extends Controller
 {
     /**
+     * GET /api/v1/reportes/dashboard
+     * Counts agregados para la pantalla principal del admin.
+     */
+    public function dashboard(Request $request): JsonResponse
+    {
+        $inicioMes = now()->startOfMonth()->toDateString();
+
+        $inscripcionesPendientes = DB::table('inscripciones')
+            ->where('estado', 'pendiente')
+            ->count();
+
+        $matriculasDelMes = DB::table('matriculas')
+            ->where('fecha_matricula', '>=', $inicioMes)
+            ->whereNull('deleted_at')
+            ->count();
+
+        $pagosDelMes = (float) DB::table('pagos')
+            ->where('estado', Pago::ESTADO_PAGADO)
+            ->where('fecha_pago', '>=', $inicioMes)
+            ->sum('monto');
+
+        $pagosVencidos = DB::table('pagos')
+            ->where('estado', Pago::ESTADO_VENCIDO)
+            ->count();
+
+        $totalEstudiantes = DB::table('estudiantes')->whereNull('deleted_at')->count();
+        $totalDocentes    = DB::table('docentes')->count();
+
+        return response()->json([
+            'data' => [
+                'inscripciones_pendientes' => $inscripcionesPendientes,
+                'matriculas_del_mes'       => $matriculasDelMes,
+                'pagos_del_mes'            => $pagosDelMes,
+                'pagos_vencidos'           => $pagosVencidos,
+                'total_estudiantes'        => $totalEstudiantes,
+                'total_docentes'           => $totalDocentes,
+            ],
+        ]);
+    }
+
+    /**
      * GET /api/v1/reportes/inscripciones?periodo_id=&estado=
      */
     public function inscripciones(Request $request): JsonResponse

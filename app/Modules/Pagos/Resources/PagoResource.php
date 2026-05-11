@@ -24,7 +24,11 @@ class PagoResource extends JsonResource
             'fecha_pago'        => $this->fecha_pago?->toDateString(),
             'metodo'            => $this->metodo,
             'estado'            => $this->estado,
-            'comprobante_url'   => $this->comprobante_url,
+            'comprobante_url'   => $this->comprobante_url
+                ? (str_starts_with($this->comprobante_url, 'http')
+                    ? $this->comprobante_url
+                    : asset('storage/' . $this->comprobante_url))
+                : null,
             'observaciones'     => $this->observaciones,
             'registrado_por'    => $this->registrado_por,
             'created_at'        => $this->created_at?->toIso8601String(),

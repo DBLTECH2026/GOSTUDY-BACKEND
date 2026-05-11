@@ -2,24 +2,21 @@
 
 /*
 | Rutas del módulo Inscripción — Persona B
-| ⚠️ ENDPOINT PÚBLICO (sin auth) para que el padre inscriba al alumno desde la web.
-| Aplicar throttle:5,1 (5 requests por minuto por IP).
 */
 
+use App\Modules\Inscripcion\Controllers\InscripcionController;
 use Illuminate\Support\Facades\Route;
-// use App\Modules\Inscripcion\Controllers\InscripcionPublicaController;
-// use App\Modules\Inscripcion\Controllers\InscripcionAdminController;
 
-// Públicas (sin auth, con rate limit)
-Route::middleware('throttle:5,1')->group(function () {
-    // Route::post('/inscripcion', [InscripcionPublicaController::class, 'store']);
-    // Route::get('/inscripcion/{codigo}/estado', [InscripcionPublicaController::class, 'estado']);
+// Pública (sin auth) — formulario de inscripción del padre desde la web
+Route::middleware('throttle:10,1')->group(function () {
+    Route::post('/inscripciones',                  [InscripcionController::class, 'store']);
+    Route::post('/inscripcion/enviar-facturacion', [InscripcionController::class, 'enviarFacturacion']);
 });
 
-// Admin (con auth)
+// Admin (con auth Sanctum) — gestión de inscripciones pendientes
 Route::middleware('auth:sanctum')->group(function () {
-    // Route::get('/inscripciones', [InscripcionAdminController::class, 'index']);
-    // Route::get('/inscripciones/{inscripcion}', [InscripcionAdminController::class, 'show']);
-    // Route::post('/inscripciones/{inscripcion}/aprobar', [InscripcionAdminController::class, 'aprobar']);
-    // Route::post('/inscripciones/{inscripcion}/rechazar', [InscripcionAdminController::class, 'rechazar']);
+    Route::get('/inscripciones',                          [InscripcionController::class, 'index']);
+    Route::get('/inscripciones/{inscripcion}',            [InscripcionController::class, 'show']);
+    Route::post('/inscripciones/{inscripcion}/aprobar',   [InscripcionController::class, 'aprobar']);
+    Route::post('/inscripciones/{inscripcion}/rechazar',  [InscripcionController::class, 'rechazar']);
 });

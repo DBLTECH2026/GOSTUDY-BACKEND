@@ -9,33 +9,72 @@ use App\Modules\Pagos\Requests\RegistrarPagoRequest;
 use App\Modules\Pagos\Resources\PagoResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class PagoController extends Controller
 {
     /**
      * GET /api/v1/pagos?matricula_id=&estado=&mes=
+     * Devuelve pagos con datos del alumno embebidos (para el listado admin).
      */
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): JsonResponse
     {
-        $query = Pago::query()->latest('fecha_vencimiento');
+        $query = DB::table('pagos as p')
+            ->join('matriculas as m', 'm.id', '=', 'p.matricula_id')
+            ->join('estudiantes as e', 'e.id', '=', 'm.estudiante_id')
+            ->join('secciones as s', 's.id', '=', 'm.seccion_id')
+            ->join('grados as g', 'g.id', '=', 's.grado_id')
+            ->join('niveles as n', 'n.id', '=', 'g.nivel_id')
+            ->whereNull('m.deleted_at')
+            ->select([
+                'p.id', 'p.matricula_id', 'p.concepto', 'p.descripcion', 'p.monto',
+                'p.mes', 'p.fecha_vencimiento', 'p.fecha_pago', 'p.metodo', 'p.estado',
+                'p.comprobante_url', 'p.observaciones', 'p.registrado_por', 'p.created_at',
+                'e.id as alumno_id', 'e.nombres as alumno_nombres', 'e.apellidos as alumno_apellidos',
+                'g.nombre as grado', 'n.nombre as nivel', 's.nombre as seccion',
+            ])
+            ->orderBy('p.fecha_vencimiento');
 
         if ($request->filled('matricula_id')) {
-            $query->where('matricula_id', $request->integer('matricula_id'));
+            $query->where('p.matricula_id', $request->integer('matricula_id'));
         }
-
         if ($request->filled('estado')) {
-            $query->where('estado', $request->string('estado'));
+            $query->where('p.estado', $request->string('estado'));
         }
-
         if ($request->filled('mes')) {
-            $query->where('mes', $request->integer('mes'));
+            $query->where('p.mes', $request->integer('mes'));
         }
 
-        $pagos = $query->paginate(50);
+        $items = $query->get()->map(fn ($r) => [
+            'id'                => (int) $r->id,
+            'matricula_id'      => (int) $r->matricula_id,
+            'concepto'          => $r->concepto,
+            'descripcion'       => $r->descripcion,
+            'monto'             => (float) $r->monto,
+            'mes'               => $r->mes !== null ? (int) $r->mes : null,
+            'fecha_vencimiento' => $r->fecha_vencimiento,
+            'fecha_pago'        => $r->fecha_pago,
+            'metodo'            => $r->metodo,
+            'estado'            => $r->estado,
+            'comprobante_url'   => $r->comprobante_url
+                ? (str_starts_with($r->comprobante_url, 'http')
+                    ? $r->comprobante_url
+                    : asset('storage/' . $r->comprobante_url))
+                : null,
+            'observaciones'     => $r->observaciones,
+            'registrado_por'    => $r->registrado_por !== null ? (int) $r->registrado_por : null,
+            'created_at'        => $r->created_at,
+            'alumno' => [
+                'id'        => (int) $r->alumno_id,
+                'nombres'   => $r->alumno_nombres,
+                'apellidos' => $r->alumno_apellidos,
+                'grado'     => "{$r->grado} {$r->nivel}",
+                'seccion'   => $r->seccion,
+            ],
+        ]);
 
-        return PagoResource::collection($pagos);
+        return response()->json(['data' => $items]);
     }
 
     /**

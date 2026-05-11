@@ -2,7 +2,7 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
+use App\Models\Usuario;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -11,15 +11,23 @@ class DatabaseSeeder extends Seeder
     use WithoutModelEvents;
 
     /**
-     * Seed the application's database.
+     * Crea un único administrador de acceso. El resto de los datos
+     * (docentes, estudiantes, inscripciones, matrículas, pagos) se
+     * crean desde la propia aplicación durante las pruebas.
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $this->call(CatalogosSeeder::class);
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        Usuario::updateOrCreate(
+            ['email' => 'admin@trilce.edu.pe'],
+            [
+                'nombres'   => 'Administrador',
+                'apellidos' => 'Trilce',
+                'password'  => 'admin123',
+                'rol'       => 'admin',
+                'estado'    => 'activo',
+            ]
+        );
     }
 }
