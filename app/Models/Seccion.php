@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -43,6 +44,21 @@ class Seccion extends Model
     public function matriculas(): HasMany
     {
         return $this->hasMany(Matricula::class);
+    }
+
+    public function docenteTutor(): BelongsTo
+    {
+        return $this->belongsTo(Docente::class, 'docente_tutor_id');
+    }
+
+    /**
+     * Cursos dictados en esta sección (pivot seccion_curso con docente_id).
+     */
+    public function cursos(): BelongsToMany
+    {
+        return $this->belongsToMany(Curso::class, 'seccion_curso')
+            ->withPivot(['id', 'docente_id'])
+            ->withTimestamps();
     }
 
     public function cupoDisponible(): int

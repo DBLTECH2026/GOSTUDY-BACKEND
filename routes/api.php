@@ -26,4 +26,5 @@ Route::prefix('v1')->group(function () {
     require __DIR__ . '/api/pagos.php';
     require __DIR__ . '/api/portal.php';
     require __DIR__ . '/api/reportes.php';
+    require __DIR__ . '/api/academico.php';
 });

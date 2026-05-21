@@ -99,15 +99,86 @@ class DocenteController extends Controller
 
         return response()->json([
             'message' => 'Docente creado.',
-            'data' => [
-                'id'              => $result['docente']->id,
-                'codigo_docente'  => $result['docente']->codigo_docente,
-                'nombre_completo' => trim($result['usuario']->nombres . ' ' . $result['usuario']->apellidos),
-                'email'           => $result['usuario']->email,
-                'especialidad'    => $result['docente']->especialidad,
-                'grado_academico' => $result['docente']->grado_academico,
-            ],
+            'data'    => $this->present($result['docente']->load('usuario')),
         ], 201);
+    }
+
+    public function show(Docente $docente): JsonResponse
+    {
+        $docente->load('usuario');
+        return response()->json(['data' => $this->present($docente)]);
+    }
+
+    public function update(Request $request, Docente $docente): JsonResponse
+    {
+        $docente->load('usuario');
+        $usuarioId = $docente->usuario->id;
+
+        $data = $request->validate([
+            'nombres'         => ['required', 'string', 'max:100'],
+            'apellidos'       => ['required', 'string', 'max:100'],
+            'email'           => ['required', 'email', 'max:150', Rule::unique('usuarios', 'email')->ignore($usuarioId)],
+            'password'        => ['nullable', 'string', 'min:6'],
+            'dni'             => ['nullable', 'string', 'size:8', Rule::unique('usuarios', 'dni')->ignore($usuarioId)],
+            'telefono'        => ['nullable', 'string', 'max:20'],
+            'especialidad'    => ['nullable', 'string', 'max:150'],
+            'grado_academico' => ['nullable', 'string', 'max:100'],
+            'estado'          => ['nullable', Rule::in(['activo', 'inactivo'])],
+        ]);
+
+        DB::transaction(function () use ($data, $docente) {
+            $camposUsuario = [
+                'nombres'   => $data['nombres'],
+                'apellidos' => $data['apellidos'],
+                'email'     => $data['email'],
+                'dni'       => $data['dni']      ?? null,
+                'telefono'  => $data['telefono'] ?? null,
+                'estado'    => $data['estado']   ?? $docente->usuario->estado,
+            ];
+            if (! empty($data['password'])) {
+                $camposUsuario['password'] = Hash::make($data['password']);
+            }
+            $docente->usuario->update($camposUsuario);
+
+            $docente->update([
+                'especialidad'    => $data['especialidad']    ?? null,
+                'grado_academico' => $data['grado_academico'] ?? null,
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Docente actualizado.',
+            'data'    => $this->present($docente->fresh()->load('usuario')),
+        ]);
+    }
+
+    public function destroy(Docente $docente): JsonResponse
+    {
+        $docente->load('usuario');
+
+        // Soft delete del Usuario (deja el registro Docente con historial)
+        DB::transaction(function () use ($docente) {
+            $docente->usuario->delete();
+        });
+
+        return response()->json(['message' => 'Docente eliminado.']);
+    }
+
+    private function present(Docente $d): array
+    {
+        return [
+            'id'              => (int) $d->id,
+            'codigo_docente'  => $d->codigo_docente,
+            'nombre_completo' => trim(($d->usuario->nombres ?? '') . ' ' . ($d->usuario->apellidos ?? '')),
+            'nombres'         => $d->usuario->nombres   ?? '',
+            'apellidos'       => $d->usuario->apellidos ?? '',
+            'email'           => $d->usuario->email     ?? '',
+            'dni'             => $d->usuario->dni       ?? null,
+            'telefono'        => $d->usuario->telefono  ?? null,
+            'especialidad'    => $d->especialidad,
+            'grado_academico' => $d->grado_academico,
+            'estado'          => $d->usuario->estado    ?? 'activo',
+        ];
     }
 
     private function generarCodigo(): string

@@ -18,6 +18,10 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(CatalogosSeeder::class);
+        $this->call(SeccionesSeeder::class);
+        $this->call(CursosSeeder::class);
+        $this->call(CalendarioAcademicoSeeder::class);
+        $this->call(HorariosDemoSeeder::class);
 
         Usuario::updateOrCreate(
             ['email' => 'admin@trilce.edu.pe'],
