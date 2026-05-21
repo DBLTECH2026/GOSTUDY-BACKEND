@@ -108,6 +108,38 @@ class InscripcionController
     }
 
     /**
+     * POST /api/v1/inscripcion/verificar-dni  (público)
+     * Verifica en vivo si un DNI ya está inscrito en el periodo activo.
+     * Devuelve { disponible: bool, motivo?: string }.
+     */
+    public function verificarDni(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'dni' => ['required', 'string', 'regex:/^\d{8}$/'],
+        ]);
+
+        $periodo = PeriodoAcademico::activo();
+        if (! $periodo) {
+            return response()->json([
+                'disponible' => true,
+                'motivo'     => null,
+            ]);
+        }
+
+        $existe = Inscripcion::where('dni_estudiante', $data['dni'])
+            ->where('periodo_id', $periodo->id)
+            ->whereIn('estado', ['pendiente', 'aprobada'])
+            ->exists();
+
+        return response()->json([
+            'disponible' => ! $existe,
+            'motivo'     => $existe
+                ? 'Ya existe una inscripción con este DNI para el periodo activo.'
+                : null,
+        ]);
+    }
+
+    /**
      * POST /api/v1/inscripcion/enviar-facturacion  (público)
      * Botón del paso 2 del form: envía al email del apoderado el monto
      * y los datos de pago, sin completar todavía la inscripción.

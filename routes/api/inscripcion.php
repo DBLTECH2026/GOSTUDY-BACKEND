@@ -13,6 +13,10 @@ Route::middleware('throttle:10,1')->group(function () {
     Route::post('/inscripcion/enviar-facturacion', [InscripcionController::class, 'enviarFacturacion']);
 });
 
+Route::middleware('throttle:30,1')->group(function () {
+    Route::post('/inscripcion/verificar-dni', [InscripcionController::class, 'verificarDni']);
+});
+
 // Admin (con auth Sanctum) — gestión de inscripciones pendientes
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/inscripciones',                          [InscripcionController::class, 'index']);
