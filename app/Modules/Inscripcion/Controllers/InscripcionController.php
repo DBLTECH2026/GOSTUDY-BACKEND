@@ -11,6 +11,7 @@ use App\Models\PeriodoAcademico;
 use App\Models\Seccion;
 use App\Modules\Inscripcion\Requests\StoreInscripcionRequest;
 use App\Modules\Matricula\Events\MatriculaAprobada;
+use App\Modules\Personas\Services\ConsultaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -112,30 +113,45 @@ class InscripcionController
      * Verifica en vivo si un DNI ya está inscrito en el periodo activo.
      * Devuelve { disponible: bool, motivo?: string }.
      */
-    public function verificarDni(Request $request): JsonResponse
+    public function verificarDni(Request $request, ConsultaService $consulta): JsonResponse
     {
         $data = $request->validate([
             'dni' => ['required', 'string', 'regex:/^\d{8}$/'],
         ]);
 
         $periodo = PeriodoAcademico::activo();
-        if (! $periodo) {
-            return response()->json([
-                'disponible' => true,
-                'motivo'     => null,
-            ]);
-        }
 
-        $existe = Inscripcion::where('dni_estudiante', $data['dni'])
-            ->where('periodo_id', $periodo->id)
-            ->whereIn('estado', ['pendiente', 'aprobada'])
-            ->exists();
+        $existe = $periodo
+            ? Inscripcion::where('dni_estudiante', $data['dni'])
+                ->where('periodo_id', $periodo->id)
+                ->whereIn('estado', ['pendiente', 'aprobada'])
+                ->exists()
+            : false;
+
+        // Si el DNI está disponible, intentamos traer nombres de RENIEC (APIsPERU)
+        // para autocompletar el formulario. Si el servicio falla, no rompe la verificación.
+        $identidad = null;
+        if (! $existe) {
+            try {
+                $r = $consulta->dni($data['dni']);
+                $identidad = [
+                    'nombres'   => $r['nombres'],
+                    'apellidos' => $r['apellidos'],
+                ];
+            } catch (\Throwable $e) {
+                Log::info('Consulta RENIEC en verificar-dni sin resultado', [
+                    'dni'   => $data['dni'],
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return response()->json([
             'disponible' => ! $existe,
             'motivo'     => $existe
                 ? 'Ya existe una inscripción con este DNI para el periodo activo.'
                 : null,
+            'identidad'  => $identidad,
         ]);
     }
 

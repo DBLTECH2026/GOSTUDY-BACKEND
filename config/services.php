@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'apisperu' => [
+        'base_url' => env('APISPERU_BASE_URL', 'https://dniruc.apisperu.com/api/v1'),
+        'token'    => env('APISPERU_TOKEN'),
+    ],
+
 ];
