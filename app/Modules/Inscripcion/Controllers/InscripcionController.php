@@ -156,6 +156,29 @@ class InscripcionController
     }
 
     /**
+     * POST /api/v1/inscripcion/consulta-dni  (público, throttle)
+     * Solo consulta RENIEC para autocompletar (p.ej. apoderado). No valida disponibilidad.
+     */
+    public function consultaDni(Request $request, ConsultaService $consulta): JsonResponse
+    {
+        $data = $request->validate([
+            'dni' => ['required', 'string', 'regex:/^\d{8}$/'],
+        ]);
+
+        try {
+            $r = $consulta->dni($data['dni']);
+
+            return response()->json([
+                'encontrado' => true,
+                'nombres'    => $r['nombres'],
+                'apellidos'  => $r['apellidos'],
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(['encontrado' => false], 200);
+        }
+    }
+
+    /**
      * POST /api/v1/inscripcion/enviar-facturacion  (público)
      * Botón del paso 2 del form: envía al email del apoderado el monto
      * y los datos de pago, sin completar todavía la inscripción.

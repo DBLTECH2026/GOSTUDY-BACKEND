@@ -15,6 +15,7 @@ Route::middleware('throttle:10,1')->group(function () {
 
 Route::middleware('throttle:30,1')->group(function () {
     Route::post('/inscripcion/verificar-dni', [InscripcionController::class, 'verificarDni']);
+    Route::post('/inscripcion/consulta-dni',  [InscripcionController::class, 'consultaDni']);
 });
 
 // Admin (con auth Sanctum) — gestión de inscripciones pendientes

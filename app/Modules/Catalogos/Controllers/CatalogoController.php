@@ -5,6 +5,8 @@ namespace App\Modules\Catalogos\Controllers;
 use App\Models\Nivel;
 use App\Models\PeriodoAcademico;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CatalogoController
 {
@@ -47,5 +49,50 @@ class CatalogoController
                 'estado'       => $periodo->estado,
             ],
         ]);
+    }
+
+    /* ─── Ubigeo (RENIEC) — cascada departamento → provincia → distrito ─── */
+
+    public function departamentos(): JsonResponse
+    {
+        $departamentos = DB::table('reniec_ubigeo')
+            ->select('departamento')
+            ->distinct()
+            ->orderBy('departamento')
+            ->pluck('departamento');
+
+        return response()->json(['data' => $departamentos]);
+    }
+
+    public function provincias(Request $request): JsonResponse
+    {
+        $request->validate(['departamento' => ['required', 'string']]);
+
+        $provincias = DB::table('reniec_ubigeo')
+            ->select('provincia')
+            ->where('departamento', $request->query('departamento'))
+            ->distinct()
+            ->orderBy('provincia')
+            ->pluck('provincia');
+
+        return response()->json(['data' => $provincias]);
+    }
+
+    public function distritos(Request $request): JsonResponse
+    {
+        $request->validate([
+            'departamento' => ['required', 'string'],
+            'provincia'    => ['required', 'string'],
+        ]);
+
+        $distritos = DB::table('reniec_ubigeo')
+            ->select('distrito')
+            ->where('departamento', $request->query('departamento'))
+            ->where('provincia', $request->query('provincia'))
+            ->distinct()
+            ->orderBy('distrito')
+            ->pluck('distrito');
+
+        return response()->json(['data' => $distritos]);
     }
 }
