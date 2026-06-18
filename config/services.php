@@ -40,4 +40,11 @@ return [
         'token'    => env('APISPERU_TOKEN'),
     ],
 
+    'browserless' => [
+        'url'   => env('BROWSERLESS_URL'),
+        'token' => env('BROWSERLESS_TOKEN'),
+    ],
+
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:3000'),
+
 ];

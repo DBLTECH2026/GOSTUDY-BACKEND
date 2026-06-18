@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class AuthController
@@ -147,6 +148,78 @@ class AuthController
     {
         $request->user()?->currentAccessToken()?->delete();
         return response()->json(['message' => 'Sesión cerrada.']);
+    }
+
+    /* ───────────────────── PERFIL ADMIN ───────────────────── */
+
+    public function updatePerfil(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user instanceof Usuario) {
+            return response()->json(['message' => 'Acción no permitida.'], 403);
+        }
+
+        $data = $request->validate([
+            'nombres'   => ['required', 'string', 'max:120'],
+            'apellidos' => ['required', 'string', 'max:120'],
+            'email'     => ['required', 'email', 'max:160', "unique:usuarios,email,{$user->id}"],
+            'dni'       => ['nullable', 'string', 'max:15'],
+            'telefono'  => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $user->update($data);
+
+        return response()->json(['user' => $this->presentAdmin($user->fresh())]);
+    }
+
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user instanceof Usuario) {
+            return response()->json(['message' => 'Acción no permitida.'], 403);
+        }
+
+        $data = $request->validate([
+            'password_actual' => ['required', 'string'],
+            'password'        => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        if (! Hash::check($data['password_actual'], $user->password)) {
+            return response()->json([
+                'message' => 'La contraseña actual es incorrecta.',
+                'errors'  => ['password_actual' => ['La contraseña actual es incorrecta.']],
+            ], 422);
+        }
+
+        $user->update(['password' => $data['password']]);
+
+        return response()->json(['message' => 'Contraseña actualizada.']);
+    }
+
+    public function updateFoto(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (! $user instanceof Usuario) {
+            return response()->json(['message' => 'Acción no permitida.'], 403);
+        }
+
+        $request->validate([
+            'foto' => ['required', 'image'],
+        ]);
+
+        // Borrar foto anterior si vivía en storage/public
+        if ($user->foto_url && str_contains($user->foto_url, '/storage/usuarios/fotos/')) {
+            $prev = str_replace('/storage/', '', parse_url($user->foto_url, PHP_URL_PATH));
+            Storage::disk('public')->delete($prev);
+        }
+
+        $path = $request->file('foto')->store('usuarios/fotos', 'public');
+        $user->update(['foto_url' => Storage::url($path)]);
+
+        return response()->json(['user' => $this->presentAdmin($user->fresh())]);
     }
 
     /* ───────────────────── HELPERS ───────────────────── */

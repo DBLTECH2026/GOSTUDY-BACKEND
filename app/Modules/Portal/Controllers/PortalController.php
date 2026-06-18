@@ -3,6 +3,7 @@
 namespace App\Modules\Portal\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Calificacion;
 use App\Models\Pago;
 use App\Modules\Pagos\Resources\PagoResource;
 use Illuminate\Http\JsonResponse;
@@ -338,6 +339,45 @@ class PortalController extends Controller
                 'bimestres' => $bimestresOut,
             ],
         ]);
+    }
+
+    /**
+     * GET /api/v1/portal/cursos/{seccionCursoId}/notas
+     * Notas del estudiante autenticado en ese curso, agrupadas por bimestre.
+     */
+    public function misNotas(Request $request, int $seccionCursoId): JsonResponse
+    {
+        $estudianteId = $this->estudianteId($request);
+
+        // matrícula activa del estudiante
+        $matricula = DB::table('matriculas')
+            ->where('estudiante_id', $estudianteId)
+            ->where('estado', 'activa')
+            ->whereNull('deleted_at')
+            ->first();
+        abort_if($matricula === null, 404, 'No tienes matrícula activa.');
+
+        // el seccion_curso debe pertenecer a su sección
+        $perteneceASeccion = DB::table('seccion_curso')
+            ->where('id', $seccionCursoId)
+            ->where('seccion_id', $matricula->seccion_id)
+            ->exists();
+        abort_unless($perteneceASeccion, 403, 'Este curso no pertenece a tu sección.');
+
+        $rows = Calificacion::where('seccion_curso_id', $seccionCursoId)
+            ->where('matricula_id', $matricula->id)
+            ->join('competencias', 'competencias.id', '=', 'calificaciones.competencia_id')
+            ->join('bimestres', 'bimestres.id', '=', 'calificaciones.bimestre_id')
+            ->orderBy('bimestres.orden')
+            ->get([
+                'bimestres.id as bimestre_id',
+                'bimestres.nombre as bimestre',
+                'competencias.nombre as competencia',
+                'calificaciones.nota',
+                'calificaciones.conclusion_descriptiva as conclusion',
+            ]);
+
+        return response()->json(['data' => $rows]);
     }
 
     /**

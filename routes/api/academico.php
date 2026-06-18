@@ -6,6 +6,7 @@
 */
 
 use App\Modules\Academico\Controllers\AsignacionController;
+use App\Modules\Academico\Controllers\CompetenciaController;
 use App\Modules\Academico\Controllers\CursoController;
 use App\Modules\Academico\Controllers\DocenteAcademicoController;
 use App\Modules\Academico\Controllers\HorarioController;
@@ -33,8 +34,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('cursos/{curso}',  [CursoController::class, 'update']);
     Route::delete('cursos/{curso}', [CursoController::class, 'destroy']);
 
+    // Competencias por curso
+    Route::get('cursos/{curso}/competencias',  [CompetenciaController::class, 'index']);
+    Route::post('cursos/{curso}/competencias', [CompetenciaController::class, 'store']);
+    Route::put('competencias/{competencia}',    [CompetenciaController::class, 'update']);
+    Route::delete('competencias/{competencia}', [CompetenciaController::class, 'destroy']);
+
     // Panel del docente
     Route::prefix('docente')->group(function () {
+        Route::get('mi-horario', [DocenteAcademicoController::class, 'miHorario']);
+        Route::get('mis-pagos', [DocenteAcademicoController::class, 'misPagos']);
         Route::get('mis-clases', [DocenteAcademicoController::class, 'misClases']);
         Route::get('mis-clases/{seccionCursoId}', [DocenteAcademicoController::class, 'detalleClase'])
             ->whereNumber('seccionCursoId');
@@ -53,5 +62,22 @@ Route::middleware('auth:sanctum')->group(function () {
             ->whereNumber('seccionCursoId')
             ->whereNumber('semanaId')
             ->whereNumber('materialId');
+
+        // Alumnos / Notas / Asistencia de la clase
+        Route::get('mis-clases/{seccionCursoId}/alumnos',
+            [DocenteAcademicoController::class, 'alumnos'])
+            ->whereNumber('seccionCursoId');
+        Route::get('mis-clases/{seccionCursoId}/notas',
+            [DocenteAcademicoController::class, 'notas'])
+            ->whereNumber('seccionCursoId');
+        Route::put('mis-clases/{seccionCursoId}/notas',
+            [DocenteAcademicoController::class, 'guardarNotas'])
+            ->whereNumber('seccionCursoId');
+        Route::get('mis-clases/{seccionCursoId}/asistencia',
+            [DocenteAcademicoController::class, 'asistencia'])
+            ->whereNumber('seccionCursoId');
+        Route::put('mis-clases/{seccionCursoId}/asistencia',
+            [DocenteAcademicoController::class, 'guardarAsistencia'])
+            ->whereNumber('seccionCursoId');
     });
 });

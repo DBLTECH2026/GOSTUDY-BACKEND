@@ -4,9 +4,11 @@ namespace App\Modules\Reportes\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Pago;
+use App\Services\PdfService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Symfony\Component\HttpFoundation\Response;
 
 /**
  * GOSTUDY — Persona C · Reportes.
@@ -171,5 +173,37 @@ class ReporteController extends Controller
                 'por_concepto'        => $porConcepto,
             ],
         ]);
+    }
+
+    /**
+     * GET /api/v1/reportes/pdf?ruta=/reportes/acta-notas&...
+     * Genera el PDF del reporte vía Browserless. Si no hay token
+     * configurado, responde 409 para que el front use el fallback jsPDF.
+     */
+    public function pdf(Request $request): Response|JsonResponse
+    {
+        $validated = $request->validate([
+            'ruta' => ['required', 'string'],
+        ]);
+
+        $pdfService = new PdfService();
+
+        if (! $pdfService->configurado()) {
+            return response()->json(['fallback' => 'jspdf'], 409);
+        }
+
+        $ruta = $validated['ruta'];
+        $otrosParams = $request->except('ruta');
+        $otrosParams['print'] = '1';
+
+        $url = rtrim((string) config('services.frontend_url'), '/')
+            . '/' . ltrim($ruta, '/')
+            . '?' . http_build_query($otrosParams);
+
+        $pdf = $pdfService->fromUrl($url);
+
+        return response($pdf, 200)
+            ->header('Content-Type', 'application/pdf')
+            ->header('Content-Disposition', 'attachment; filename="reporte.pdf"');
     }
 }

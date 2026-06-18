@@ -3,10 +3,14 @@
 namespace App\Modules\Academico\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Asistencia;
 use App\Models\Bimestre;
+use App\Models\Calificacion;
+use App\Models\Competencia;
 use App\Models\ContenidoSemana;
 use App\Models\Docente;
 use App\Models\MaterialSemana;
+use App\Models\PagoDocente;
 use App\Models\Semana;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -73,6 +77,46 @@ class DocenteAcademicoController extends Controller
             });
 
         return response()->json(['data' => $clases]);
+    }
+
+    /**
+     * GET /docente/mi-horario
+     * Slots de horario de TODAS las clases que dicta el docente.
+     */
+    public function miHorario(Request $request): JsonResponse
+    {
+        $docenteId = $this->docenteId($request);
+
+        $slots = DB::table('horarios as h')
+            ->join('seccion_curso as sc', 'sc.id', '=', 'h.seccion_curso_id')
+            ->join('cursos as c', 'c.id', '=', 'sc.curso_id')
+            ->join('secciones as s', 's.id', '=', 'sc.seccion_id')
+            ->join('grados as g', 'g.id', '=', 's.grado_id')
+            ->join('niveles as n', 'n.id', '=', 'g.nivel_id')
+            ->where('sc.docente_id', $docenteId)
+            ->whereNull('c.deleted_at')
+            ->orderBy('h.dia_semana')
+            ->orderBy('h.hora_inicio')
+            ->get([
+                'sc.id as seccion_curso_id',
+                'c.nombre as curso', 'c.codigo',
+                'g.nombre as grado', 's.nombre as seccion', 'n.nombre as nivel',
+                'h.dia_semana', 'h.hora_inicio', 'h.hora_fin', 'h.aula',
+            ])
+            ->map(fn ($r) => [
+                'seccion_curso_id' => (int) $r->seccion_curso_id,
+                'curso'            => $r->curso,
+                'codigo'           => $r->codigo,
+                'grado'            => $r->grado,
+                'seccion'          => $r->seccion,
+                'nivel'            => $r->nivel,
+                'dia_semana'       => (int) $r->dia_semana,
+                'hora_inicio'      => substr((string) $r->hora_inicio, 0, 5),
+                'hora_fin'         => substr((string) $r->hora_fin, 0, 5),
+                'aula'             => $r->aula,
+            ]);
+
+        return response()->json(['data' => $slots]);
     }
 
     /**
@@ -318,6 +362,225 @@ class DocenteAcademicoController extends Controller
         if ($bytes < 1024) return $bytes . ' B';
         if ($bytes < 1024 * 1024) return round($bytes / 1024, 1) . ' KB';
         return round($bytes / 1024 / 1024, 1) . ' MB';
+    }
+
+    /* ──────────────── Alumnos / Notas / Asistencia ──────────────── */
+
+    /**
+     * GET /docente/mis-clases/{seccionCursoId}/alumnos
+     */
+    public function alumnos(Request $request, int $seccionCursoId): JsonResponse
+    {
+        $docenteId = $this->docenteId($request);
+        $this->validarPropiedadCurso($seccionCursoId, $docenteId);
+
+        $alumnos = $this->alumnosDeSeccionCurso($seccionCursoId);
+
+        return response()->json(['data' => $alumnos]);
+    }
+
+    /** Helper: matrículas activas de la sección a la que pertenece el seccion_curso. */
+    private function alumnosDeSeccionCurso(int $seccionCursoId): array
+    {
+        $seccionId = DB::table('seccion_curso')->where('id', $seccionCursoId)->value('seccion_id');
+
+        return DB::table('matriculas as m')
+            ->join('estudiantes as e', 'e.id', '=', 'm.estudiante_id')
+            ->where('m.seccion_id', $seccionId)
+            ->where('m.estado', 'activa')
+            ->whereNull('m.deleted_at')
+            ->orderBy('e.apellidos')->orderBy('e.nombres')
+            ->select([
+                'm.id as matricula_id',
+                'e.codigo_estudiante',
+                'e.nombres',
+                'e.apellidos',
+            ])
+            ->get()
+            ->map(fn ($r) => [
+                'matricula_id'      => (int) $r->matricula_id,
+                'codigo_estudiante' => $r->codigo_estudiante,
+                'nombres'           => $r->nombres,
+                'apellidos'         => $r->apellidos,
+                'nombre'            => trim("{$r->apellidos}, {$r->nombres}"),
+            ])
+            ->all();
+    }
+
+    /**
+     * GET /docente/mis-clases/{seccionCursoId}/notas?bimestre_id=
+     */
+    public function notas(Request $request, int $seccionCursoId): JsonResponse
+    {
+        $docenteId = $this->docenteId($request);
+        $this->validarPropiedadCurso($seccionCursoId, $docenteId);
+
+        $bimestreId = (int) $request->query('bimestre_id');
+        abort_if($bimestreId === 0, 422, 'Falta bimestre_id.');
+
+        $cursoId = DB::table('seccion_curso')->where('id', $seccionCursoId)->value('curso_id');
+
+        $competencias = Competencia::where('curso_id', $cursoId)
+            ->orderBy('orden')->orderBy('id')
+            ->get(['id', 'nombre']);
+
+        $alumnos = $this->alumnosDeSeccionCurso($seccionCursoId);
+
+        $notas = Calificacion::where('seccion_curso_id', $seccionCursoId)
+            ->where('bimestre_id', $bimestreId)
+            ->get(['matricula_id', 'competencia_id', 'nota', 'conclusion_descriptiva'])
+            ->map(fn ($c) => [
+                'matricula_id'   => (int) $c->matricula_id,
+                'competencia_id' => (int) $c->competencia_id,
+                'nota'           => $c->nota,
+                'conclusion'     => $c->conclusion_descriptiva,
+            ]);
+
+        return response()->json([
+            'data' => [
+                'competencias' => $competencias,
+                'alumnos'      => $alumnos,
+                'notas'        => $notas,
+            ],
+        ]);
+    }
+
+    /**
+     * PUT /docente/mis-clases/{seccionCursoId}/notas
+     * body: { bimestre_id, items: [{matricula_id, competencia_id, nota|null, conclusion?}] }
+     */
+    public function guardarNotas(Request $request, int $seccionCursoId): JsonResponse
+    {
+        $docenteId = $this->docenteId($request);
+        $this->validarPropiedadCurso($seccionCursoId, $docenteId);
+
+        $data = $request->validate([
+            'bimestre_id'             => ['required', 'integer', 'exists:bimestres,id'],
+            'items'                   => ['required', 'array'],
+            'items.*.matricula_id'    => ['required', 'integer'],
+            'items.*.competencia_id'  => ['required', 'integer'],
+            'items.*.nota'            => ['nullable', 'in:AD,A,B,C'],
+            'items.*.conclusion'      => ['nullable', 'string'],
+        ]);
+
+        $cursoId = DB::table('seccion_curso')->where('id', $seccionCursoId)->value('curso_id');
+        $compValidas = Competencia::where('curso_id', $cursoId)->pluck('id')->all();
+
+        DB::transaction(function () use ($data, $seccionCursoId, $compValidas) {
+            foreach ($data['items'] as $item) {
+                if (! in_array($item['competencia_id'], $compValidas, true)) {
+                    continue; // ignora competencias que no son del curso
+                }
+                Calificacion::updateOrCreate(
+                    [
+                        'matricula_id'   => $item['matricula_id'],
+                        'competencia_id' => $item['competencia_id'],
+                        'bimestre_id'    => $data['bimestre_id'],
+                    ],
+                    [
+                        'seccion_curso_id'       => $seccionCursoId,
+                        'nota'                   => $item['nota'] ?? null,
+                        'conclusion_descriptiva' => $item['conclusion'] ?? null,
+                    ],
+                );
+            }
+        });
+
+        return response()->json(['message' => 'Notas guardadas.']);
+    }
+
+    /**
+     * GET /docente/mis-clases/{seccionCursoId}/asistencia?fecha=YYYY-MM-DD
+     */
+    public function asistencia(Request $request, int $seccionCursoId): JsonResponse
+    {
+        $docenteId = $this->docenteId($request);
+        $this->validarPropiedadCurso($seccionCursoId, $docenteId);
+
+        $fecha = $request->query('fecha');
+        abort_if(empty($fecha), 422, 'Falta fecha.');
+
+        $alumnos = $this->alumnosDeSeccionCurso($seccionCursoId);
+
+        $estados = Asistencia::where('seccion_curso_id', $seccionCursoId)
+            ->whereDate('fecha', $fecha)
+            ->pluck('estado', 'matricula_id');
+
+        $alumnos = array_map(function ($a) use ($estados) {
+            $a['estado'] = $estados[$a['matricula_id']] ?? null;
+            return $a;
+        }, $alumnos);
+
+        return response()->json(['data' => ['fecha' => $fecha, 'alumnos' => $alumnos]]);
+    }
+
+    /**
+     * PUT /docente/mis-clases/{seccionCursoId}/asistencia
+     * body: { fecha, items: [{matricula_id, estado}] }
+     */
+    public function guardarAsistencia(Request $request, int $seccionCursoId): JsonResponse
+    {
+        $docenteId = $this->docenteId($request);
+        $this->validarPropiedadCurso($seccionCursoId, $docenteId);
+
+        $data = $request->validate([
+            'fecha'                => ['required', 'date'],
+            'items'                => ['required', 'array'],
+            'items.*.matricula_id' => ['required', 'integer'],
+            'items.*.estado'       => ['required', 'in:presente,tarde,falta,justificada'],
+        ]);
+
+        DB::transaction(function () use ($data, $seccionCursoId) {
+            foreach ($data['items'] as $item) {
+                Asistencia::updateOrCreate(
+                    [
+                        'matricula_id'     => $item['matricula_id'],
+                        'seccion_curso_id' => $seccionCursoId,
+                        'fecha'            => $data['fecha'],
+                    ],
+                    ['estado' => $item['estado']],
+                );
+            }
+        });
+
+        return response()->json(['message' => 'Asistencia guardada.']);
+    }
+
+    /* ──────────────── Pagos del docente ──────────────── */
+
+    /**
+     * GET /docente/mis-pagos
+     * Pagos del docente autenticado + resumen (total pagado / pendiente).
+     */
+    public function misPagos(Request $request): JsonResponse
+    {
+        $docenteId = $this->docenteId($request);
+
+        $pagos = PagoDocente::where('docente_id', $docenteId)
+            ->orderBy('anio', 'desc')
+            ->orderBy('mes', 'desc')
+            ->get();
+
+        $totalPagado = (float) $pagos->where('estado', 'pagado')->sum('monto');
+        $totalPendiente = (float) $pagos->where('estado', 'pendiente')->sum('monto');
+
+        return response()->json([
+            'data' => [
+                'pagos' => $pagos->map(fn ($p) => [
+                    'id'          => (int) $p->id,
+                    'concepto'    => $p->concepto,
+                    'descripcion' => $p->descripcion,
+                    'monto'       => (float) $p->monto,
+                    'mes'         => $p->mes !== null ? (int) $p->mes : null,
+                    'anio'        => (int) $p->anio,
+                    'estado'      => $p->estado,
+                    'fecha_pago'  => $p->fecha_pago?->toDateString(),
+                    'metodo'      => $p->metodo,
+                ])->values(),
+                'total_pagado'    => $totalPagado,
+                'total_pendiente' => $totalPendiente,
+            ],
+        ]);
     }
 
     /* ──────────────── helpers ──────────────── */

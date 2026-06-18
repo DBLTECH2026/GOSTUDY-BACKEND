@@ -17,5 +17,7 @@ Route::middleware(['auth:sanctum'/*, 'es.estudiante'*/])->prefix('portal')->grou
     Route::get('/mis-cursos',   [PortalController::class, 'misCursos']);
     Route::get('/cursos/{seccionCursoId}', [PortalController::class, 'detalleCurso'])
         ->whereNumber('seccionCursoId');
+    Route::get('/cursos/{seccionCursoId}/notas', [PortalController::class, 'misNotas'])
+        ->whereNumber('seccionCursoId');
     Route::post('/pagos/{pago}/subir-comprobante', [PortalController::class, 'subirComprobante']);
 });

@@ -20,5 +20,10 @@ Route::prefix('auth')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/me',     [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
+
+        // Perfil del usuario admin/docente autenticado
+        Route::put('/perfil',          [AuthController::class, 'updatePerfil']);
+        Route::put('/perfil/password', [AuthController::class, 'updatePassword']);
+        Route::post('/perfil/foto',    [AuthController::class, 'updateFoto']);
     });
 });
