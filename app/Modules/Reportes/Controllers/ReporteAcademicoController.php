@@ -339,6 +339,7 @@ class ReporteAcademicoController extends Controller
             ->where('m.id', $matriculaId)
             ->whereNull('m.deleted_at')
             ->select([
+                'e.id as estudiante_id',
                 'e.codigo_estudiante',
                 'e.dni',
                 'e.nombres',
@@ -364,18 +365,38 @@ class ReporteAcademicoController extends Controller
 
         abort_if($row === null, 404, 'La matrícula no existe.');
 
-        $familiares = $row->datos_familiares
-            ? json_decode((string) $row->datos_familiares, true)
-            : null;
-        $principal = $familiares['apoderado_principal'] ?? null;
+        // Apoderado: fuente canónica = perfiles_familiares (titular o primero).
+        // Fallback = JSON datos_familiares de la inscripción (alumnos sin perfil).
+        $perfil = DB::table('perfiles_familiares')
+            ->where('estudiante_id', $row->estudiante_id)
+            ->orderByDesc('es_titular')
+            ->orderBy('id')
+            ->first();
 
-        $apoderado = $principal ? [
-            'nombre'   => trim(($principal['apellidos'] ?? '') . ', ' . ($principal['nombres'] ?? ''), ', '),
-            'dni'      => $principal['dni']      ?? null,
-            'parentesco' => $principal['tipo']   ?? null,
-            'telefono' => $principal['telefono'] ?? null,
-            'email'    => $principal['email']    ?? null,
-        ] : null;
+        if ($perfil !== null) {
+            $apoderado = [
+                'nombre'     => trim("{$perfil->apellidos}, {$perfil->nombres}"),
+                'dni'        => $perfil->dni,
+                'parentesco' => $perfil->parentesco ?: $perfil->tipo,
+                'telefono'   => $perfil->telefono,
+                'email'      => $perfil->email,
+                'ocupacion'  => $perfil->ocupacion,
+            ];
+        } else {
+            $familiares = $row->datos_familiares
+                ? json_decode((string) $row->datos_familiares, true)
+                : null;
+            $principal = $familiares['apoderado_principal'] ?? null;
+
+            $apoderado = $principal ? [
+                'nombre'     => trim(($principal['apellidos'] ?? '') . ', ' . ($principal['nombres'] ?? ''), ', '),
+                'dni'        => $principal['dni']      ?? null,
+                'parentesco' => $principal['tipo']     ?? null,
+                'telefono'   => $principal['telefono'] ?? null,
+                'email'      => $principal['email']    ?? null,
+                'ocupacion'  => $principal['ocupacion'] ?? null,
+            ] : null;
+        }
 
         return response()->json([
             'data' => [
