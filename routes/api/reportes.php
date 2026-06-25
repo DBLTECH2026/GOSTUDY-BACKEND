@@ -23,6 +23,7 @@ Route::middleware('auth:sanctum')->prefix('reportes')->group(function () {
     Route::get('acta-notas',  [ReporteAcademicoController::class, 'actaNotas']);
     Route::get('desaprobados', [ReporteAcademicoController::class, 'desaprobados']);
     Route::get('boleta',      [ReporteAcademicoController::class, 'boleta']);
+    Route::get('ficha-matricula', [ReporteAcademicoController::class, 'fichaMatricula']);
     Route::get('asistencia',  [ReporteAcademicoController::class, 'asistenciaReporte']);
 
     // Reportes administrativos (BLOQUE 4.3)

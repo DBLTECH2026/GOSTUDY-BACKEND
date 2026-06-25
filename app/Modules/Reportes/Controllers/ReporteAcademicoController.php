@@ -105,6 +105,8 @@ class ReporteAcademicoController extends Controller
             ->join('grados as g', 'g.id', '=', 's.grado_id')
             ->join('niveles as n', 'n.id', '=', 'g.nivel_id')
             ->join('periodos_academicos as p', 'p.id', '=', 's.periodo_id')
+            ->leftJoin('docentes as d', 'd.id', '=', 'sc.docente_id')
+            ->leftJoin('usuarios as u', 'u.id', '=', 'd.usuario_id')
             ->where('sc.id', $seccionCursoId)
             ->select([
                 'sc.id as seccion_curso_id',
@@ -115,6 +117,7 @@ class ReporteAcademicoController extends Controller
                 's.nombre as seccion',
                 'n.nombre as nivel',
                 'p.descripcion as periodo',
+                DB::raw("TRIM(CONCAT(COALESCE(u.nombres, ''), ' ', COALESCE(u.apellidos, ''))) as docente"),
             ])
             ->first();
 
@@ -164,6 +167,7 @@ class ReporteAcademicoController extends Controller
                     'seccion' => $clase->seccion,
                     'nivel'   => $clase->nivel,
                     'periodo' => $clase->periodo,
+                    'docente' => $clase->docente !== '' ? $clase->docente : null,
                 ],
                 'competencias' => $competencias,
                 'alumnos'      => $alumnos,
@@ -310,6 +314,94 @@ class ReporteAcademicoController extends Controller
                 ],
                 'periodo' => $alumno->periodo,
                 'cursos'  => $cursosOut,
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/reportes/ficha-matricula?matricula_id=
+     *
+     * Ficha de matrícula completa de un alumno: datos del estudiante,
+     * datos de la matrícula y datos del apoderado (desde la inscripción).
+     */
+    public function fichaMatricula(Request $request): JsonResponse
+    {
+        $matriculaId = (int) $request->query('matricula_id');
+        abort_if($matriculaId === 0, 422, 'Falta matricula_id.');
+
+        $row = DB::table('matriculas as m')
+            ->join('estudiantes as e', 'e.id', '=', 'm.estudiante_id')
+            ->join('secciones as s', 's.id', '=', 'm.seccion_id')
+            ->join('grados as g', 'g.id', '=', 's.grado_id')
+            ->join('niveles as n', 'n.id', '=', 'g.nivel_id')
+            ->join('periodos_academicos as p', 'p.id', '=', 'm.periodo_id')
+            ->leftJoin('inscripciones as i', 'i.id', '=', 'm.inscripcion_id')
+            ->where('m.id', $matriculaId)
+            ->whereNull('m.deleted_at')
+            ->select([
+                'e.codigo_estudiante',
+                'e.dni',
+                'e.nombres',
+                'e.apellidos',
+                'e.fecha_nacimiento',
+                'e.sexo',
+                'e.direccion',
+                'e.departamento',
+                'e.provincia',
+                'e.distrito',
+                'e.ie_procedencia',
+                'e.anio_procedencia',
+                'e.foto_url',
+                'm.fecha_matricula',
+                'm.estado as estado_matricula',
+                'n.nombre as nivel',
+                'g.nombre as grado',
+                's.nombre as seccion',
+                'p.descripcion as periodo',
+                'i.datos_familiares',
+            ])
+            ->first();
+
+        abort_if($row === null, 404, 'La matrícula no existe.');
+
+        $familiares = $row->datos_familiares
+            ? json_decode((string) $row->datos_familiares, true)
+            : null;
+        $principal = $familiares['apoderado_principal'] ?? null;
+
+        $apoderado = $principal ? [
+            'nombre'   => trim(($principal['apellidos'] ?? '') . ', ' . ($principal['nombres'] ?? ''), ', '),
+            'dni'      => $principal['dni']      ?? null,
+            'parentesco' => $principal['tipo']   ?? null,
+            'telefono' => $principal['telefono'] ?? null,
+            'email'    => $principal['email']    ?? null,
+        ] : null;
+
+        return response()->json([
+            'data' => [
+                'estudiante' => [
+                    'codigo'           => $row->codigo_estudiante,
+                    'dni'              => $row->dni,
+                    'nombre'           => trim("{$row->apellidos}, {$row->nombres}"),
+                    'fecha_nacimiento' => $row->fecha_nacimiento,
+                    'sexo'             => $row->sexo,
+                    'direccion'        => $row->direccion,
+                    'departamento'     => $row->departamento,
+                    'provincia'        => $row->provincia,
+                    'distrito'         => $row->distrito,
+                    'ie_procedencia'   => $row->ie_procedencia,
+                    'anio_procedencia' => $row->anio_procedencia,
+                    'foto_url'         => $row->foto_url,
+                ],
+                'matricula' => [
+                    'periodo'        => $row->periodo,
+                    'nivel'          => $row->nivel,
+                    'grado'          => $row->grado,
+                    'seccion'        => $row->seccion,
+                    'fecha'          => $row->fecha_matricula,
+                    'estado'         => $row->estado_matricula,
+                ],
+                'apoderado' => $apoderado,
             ],
         ]);
     }
